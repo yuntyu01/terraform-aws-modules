@@ -64,7 +64,7 @@ resource "aws_security_group" "was_sg" {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
-    cidr_blocks = [aws_security_group.alb_sg.id]
+    aws_security_group = [aws_security_group.alb_sg.id]
     description = "Allow HTTP only from ALB"
   }
 
