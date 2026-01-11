@@ -339,6 +339,8 @@ resource "aws_db_instance" "prod_db" {
   engine            = "mysql"
   engine_version    = "8.0"
   instance_class    = "db.t3.micro"
+  multi_az = true
+
 
   db_name  = "ccdb"
   username = "ccuser"
