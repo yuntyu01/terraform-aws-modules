@@ -8,6 +8,9 @@
 # asg_desired
 # asg_max
 # asg_min
+# domain_name
+# route53_zone_id
+# bucket_name
 
 variable "name" {
   description = "리소스 이름에 붙을 접두사 (예: dailo-prod)"
@@ -61,4 +64,19 @@ variable "asg_min" {
   description = "ASG 최소 인스턴스 수"
   type        = number
   default     = 2
+}
+
+variable "domain_name" {
+  description = "SSL 인증서를 발급받을 도메인 이름 (예: api.dailo.com)"
+  type        = string
+}
+
+variable "route53_zone_id" {
+  description = "도메인을 관리하는 Route53 호스팅 영역 ID (Hosted Zone ID)"
+  type        = string
+}
+
+variable "bucket_name" {
+  description = "WAS가 접근할 S3 버킷 이름 (IAM Policy 생성용)"
+  type        = string
 }

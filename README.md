@@ -1,3 +1,3 @@
 # Sprout
 
-![설명문구](./images/11.09.png)
+![설명문구](./images/26.01.17.png)

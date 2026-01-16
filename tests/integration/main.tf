@@ -18,6 +18,11 @@ provider "aws" {
   }
 }
 
+provider "aws" {
+  alias  = "virginia"
+  region = "us-east-1"
+}
+
 # ------------------------------------------------------------------------------
 # 1. VPC 모듈 테스트
 # ------------------------------------------------------------------------------
@@ -41,6 +46,10 @@ module "vpc" {
 # ------------------------------------------------------------------------------
 # 2. WAS 모듈 테스트
 # ------------------------------------------------------------------------------
+data "aws_route53_zone" "selected" {
+  name = "dailoapp.com"
+}
+
 module "was" {
   source = "../../modules/was-app"
 
@@ -51,13 +60,18 @@ module "was" {
   public_subnet_ids  = module.vpc.public_subnet_ids
   private_subnet_ids = module.vpc.was_subnet_ids
 
-  ami_id        = "ami-00a51cc7a8cd53e3f"
+  ami_id        = "ami-0678ccb690e8a9c67"
   instance_type = "t2.micro"
-  key_name      = "test-key"
+  key_name      = ".ssh/../test-key.pem"
 
   asg_desired = 2
   asg_max     = 4
   asg_min     = 2
+
+  domain_name     = "dailoapp.com"
+  route53_zone_id = data.aws_route53_zone.selected.zone_id
+
+  bucket_name = "dailoapp-test-static-assets-2025"
 }
 
 # ------------------------------------------------------------------------------
@@ -84,4 +98,23 @@ module "rds" {
   db_username = "admin"
 
   db_password = "TestPassword123!"
+}
+
+# ------------------------------------------------------------------------------
+# 4. cdn 모듈 테스트
+# ------------------------------------------------------------------------------
+module "cdn" {
+  source = "../../modules/cdn"
+
+  providers = {
+    aws.virginia = aws.virginia
+  }
+
+  name        = "test-cdn"
+  bucket_name = "dailoapp-test-static-assets-2025"
+
+  domain_name     = "dailoapp.com"
+  route53_zone_id = data.aws_route53_zone.selected.zone_id
+
+  alb_dns_name = module.was.alb_dns_name
 }
