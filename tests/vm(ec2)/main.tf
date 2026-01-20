@@ -23,6 +23,11 @@ provider "aws" {
   region = "us-east-1"
 }
 
+module "ecr" {
+  source = "../../global/ecr"
+  name   = "test-server"
+}
+
 # ------------------------------------------------------------------------------
 # 1. VPC 모듈 테스트
 # ------------------------------------------------------------------------------
@@ -62,7 +67,7 @@ module "was" {
 
   ami_id        = "ami-0678ccb690e8a9c67"
   instance_type = "t2.micro"
-  key_name      = ".ssh/../test-key.pem"
+  key_name      = "test-key"
 
   asg_desired = 2
   asg_max     = 4

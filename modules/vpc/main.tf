@@ -4,6 +4,7 @@
 # 4. Nat Gateway - 1개
 # 5. Route_Table - 2개 ()
 # 6. Route_Table_Association - 6개(Public 2개, was 2개, db 2개)
+# 7. S3 Gateway Endpoint
 
 terraform {
   required_version = ">= 1.0.0"
@@ -187,4 +188,20 @@ resource "aws_route_table_association" "db_a" {
 resource "aws_route_table_association" "db_c" {
   subnet_id      = aws_subnet.db_c.id
   route_table_id = aws_route_table.private.id
+}
+
+# ------------------------------------------------------------------------------
+# 7. S3 Gateway Endpoint
+# ------------------------------------------------------------------------------
+
+resource "aws_vpc_endpoint" "s3" {
+  vpc_id            = aws_vpc.main.id
+  service_name      = "com.amazonaws.${var.region}.s3"
+  vpc_endpoint_type = "Gateway" 
+
+  route_table_ids = [aws_route_table.private.id] 
+
+  tags = {
+    Name = "${var.name}-s3-endpoint"
+  }
 }
