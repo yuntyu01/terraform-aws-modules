@@ -108,6 +108,15 @@ variable "container_env" {
   default = []
 }
 
+variable "container_secrets" {
+  description = "컨테이너에 주입할 시크릿변수 리스트 (SSM)"
+  type = list(object({
+    name      = string
+    valueFrom = string
+  }))
+  default = []
+}
+
 variable "container_port" {
   description = "컨테이너 내부에서 사용하는 포트 (예: Spring 8080, FastAPI 8000)"
   type        = number
@@ -124,3 +133,4 @@ variable "memory" {
   type        = number
   default     = 1024
 }
+

@@ -20,6 +20,8 @@ data "aws_ec2_managed_prefix_list" "cloudfront" {
   name = "com.amazonaws.global.cloudfront.origin-facing"
 }
 
+# (참고) account_id를 가져오기 위해 data source가 없다면 추가 필요
+data "aws_caller_identity" "current" {}
 # ==============================================================================
 # 0. CloudWatch Log Group 
 # ==============================================================================
@@ -192,7 +194,7 @@ resource "aws_lb_listener" "https" {
 }
 
 # ==============================================================================
-# 4. IAM Roles (ECS Node & Task Roles & ssm)
+# 4. IAM Roles (ECS Node & Task Roles & ssm & SSM Parameter Store)
 # ==============================================================================
 
 # 4-1. EC2 Instance Role (ECS Agent)
@@ -273,7 +275,8 @@ resource "aws_iam_role_policy_attachment" "ecs_task_s3_attach" {
   policy_arn = aws_iam_policy.s3_access_policy.arn
 }
 
-# SSM 접속 허용 정책 연결
+######### Session Manage (SSM) ################
+# 접속 허용 정책 연결
 resource "aws_iam_role_policy_attachment" "ecs_instance_ssm" {
   role       = aws_iam_role.ecs_instance_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
@@ -304,6 +307,35 @@ resource "aws_iam_role_policy_attachment" "ecs_exec_attach" {
   role       = aws_iam_role.ecs_task_role.name
   policy_arn = aws_iam_policy.ecs_exec_ssm.arn
 }
+
+########### SSM Parameter Store ##############
+resource "aws_iam_policy" "ecs_ssm_read" {
+  name        = "${var.name}-ecs-ssm-read-policy"
+  description = "Allow ECS Task Execution Role to read SSM Parameters"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameters",
+          "ssm:GetParameter",
+          "kms:Decrypt" # SecureString 복호화에 필요
+        ]
+        # 특정 경로의 파라미터만 읽도록 제한 (보안 권장)
+        Resource = "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/${var.name}/*"
+      }
+    ]
+  })
+}
+
+# 2. 정책을 ecs_exec_role에 연결 (기존 exec role에 연결해야 함)
+resource "aws_iam_role_policy_attachment" "ecs_exec_ssm_read_attach" {
+  role       = aws_iam_role.ecs_exec_role.name
+  policy_arn = aws_iam_policy.ecs_ssm_read.arn
+}
+
 # ==============================================================================
 # 5. ECS Cluster & Compute (Cluster, LT, ASG, CP)
 # ==============================================================================
@@ -404,7 +436,7 @@ resource "aws_ecs_task_definition" "app" {
       essential = true
 
       environment = var.container_env
-
+      secrets = var.container_secrets
       portMappings = [
         {
           containerPort = var.container_port

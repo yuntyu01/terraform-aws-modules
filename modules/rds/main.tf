@@ -80,3 +80,37 @@ resource "aws_db_instance" "main" {
     Name = "${var.name}-db"
   }
 }
+
+# ------------------------------------------------------------------------------
+# 4. SSM Parameter Store (Secrets & Config)
+# ------------------------------------------------------------------------------
+
+# 1) DB 비밀번호 저장 (암호화)
+resource "aws_ssm_parameter" "db_password" {
+  name        = "/${var.name}/db/password"
+  description = "Password for the RDS instance"
+  type        = "SecureString"  # KMS로 자동 암호화
+  value       = var.db_password
+  
+  tags = {
+    Name = "${var.name}-db-password"
+  }
+}
+
+# 2) DB 접속 주소 저장 (암호화 안 함)
+resource "aws_ssm_parameter" "db_endpoint" {
+  name        = "/${var.name}/db/endpoint"
+  type        = "String"       
+  value       = aws_db_instance.main.address # RDS 리소스에서 주소 추출
+  
+  tags = {
+    Name = "${var.name}-db-endpoint"
+  }
+}
+
+resource "aws_ssm_parameter" "db_name" {
+  name        = "/${var.name}/db/name"
+  description = "Database name"
+  type        = "String"
+  value       = var.db_name
+}

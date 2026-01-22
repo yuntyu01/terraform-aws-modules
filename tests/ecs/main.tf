@@ -29,9 +29,9 @@ provider "aws" {
 # ------------------------------------------------------------------------------
 locals {
   assets_bucket_name = "dailoapp-test-static-assets-2025"
-  db_name     = "testdb"
-  db_username = "admin"
-  db_password = "TestPassword123!"
+  db_name            = "testdb"
+  db_username        = "admin"
+  db_password        = "TestPassword123!"
 }
 
 data "aws_route53_zone" "selected" {
@@ -39,7 +39,7 @@ data "aws_route53_zone" "selected" {
 }
 
 module "ecr" {
-  source = "../../global/ecr" 
+  source = "../../global/ecr"
   name   = "test-server"
 }
 
@@ -82,19 +82,19 @@ module "ecs" {
   domain_name     = "api.dailoapp.com" # 실제 연결할 서브도메인
   route53_zone_id = data.aws_route53_zone.selected.zone_id
 
-  bucket_name        = local.assets_bucket_name # IAM 정책 연결용
+  bucket_name        = local.assets_bucket_name  # IAM 정책 연결용
   ecr_repository_url = module.ecr.repository_url # 이미지 Pull용
 
   # [EC2 설정]
-  key_name      = "test-key"  # AWS 콘솔에 등록된 키페어 
-  instance_type = "t3.medium" 
+  key_name      = "test-key" # AWS 콘솔에 등록된 키페어 
+  instance_type = "t3.medium"
 
   # [Auto Scaling 설정]
   asg_min     = 1
   asg_max     = 2
   asg_desired = 1
 
-  cpu = 512
+  cpu    = 512
   memory = 1024
 
   container_env = [
@@ -107,10 +107,6 @@ module "ecs" {
       value = local.db_username
     },
     {
-      name  = "SPRING_DATASOURCE_PASSWORD"
-      value = local.db_password
-    },
-    {
       name  = "TZ"
       value = "Asia/Seoul"
     },
@@ -120,7 +116,14 @@ module "ecs" {
     },
     {
       name  = "AWS_S3_BUCKET"
-      value = local.assets_bucket_name  
+      value = local.assets_bucket_name
+    }
+  ]
+
+  container_secrets = [
+    {
+      name      = "SPRING_DATASOURCE_PASSWORD"
+      valueFrom = module.rds.ssm_db_password_arn
     }
   ]
 }
@@ -162,7 +165,7 @@ module "cdn" {
   }
 
   name = "test-cdn"
-  
+
   bucket_name = local.assets_bucket_name
 
   domain_name     = "dailoapp.com"
