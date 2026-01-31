@@ -16,6 +16,11 @@
 # asg_min
 # asg_desired
 # container_env
+# container_secrets
+# container_port
+# cpu
+# memory
+# desired_count
 
 variable "name" {
   description = "리소스 이름에 붙을 접두사 (예: dailo-prod)"
@@ -45,16 +50,6 @@ variable "private_subnet_ids" {
 
 variable "ami_id" {
   description = "ECS에 사용할 AMI ID"
-  type        = string
-}
-
-variable "domain_name" {
-  description = "Domain name for ACM certificate (예: api.dailo.com)"
-  type        = string
-}
-
-variable "route53_zone_id" {
-  description = "Route53 Hosted Zone ID for DNS validation"
   type        = string
 }
 
@@ -134,3 +129,9 @@ variable "memory" {
   default     = 1024
 }
 
+
+variable "desired_count" {
+  description = "Number of docker containers to run"
+  type        = number
+  default     = 2 
+}

@@ -1,10 +1,9 @@
-# 0. CloudWatch Log Group 
+# 0. Global & Base Resources
 # 1. Security Groups 
-# 2. ACM & Route53 (도메인 인증)
-# 3. ALB & Target Group
-# 4. IAM Roles (ECS Node & Task Roles & ssm)
-# 5. ECS Cluster & Compute (Cluster, LT, ASG, CP)
-# 6. ECS Task & Service
+# 2. ALB & Target Group
+# 3. IAM Roles (ECS Node & Task Roles & ssm)
+# 4. ECS Cluster & Compute (Cluster, LT, ASG, CP)
+# 5. ECS Task & Service
 
 terraform {
   required_providers {
@@ -15,19 +14,22 @@ terraform {
   }
 }
 
+
+# ==============================================================================
+# 0. Global & Base Resources
+# ==============================================================================
 # CloudFront의 IP 대역
 data "aws_ec2_managed_prefix_list" "cloudfront" {
   name = "com.amazonaws.global.cloudfront.origin-facing"
 }
 
-# (참고) account_id를 가져오기 위해 data source가 없다면 추가 필요
+# aws 계정정보 조회 (account_id 사용을 위해)
 data "aws_caller_identity" "current" {}
-# ==============================================================================
-# 0. CloudWatch Log Group 
-# ==============================================================================
+
+# CloudWatch Log Group
 resource "aws_cloudwatch_log_group" "ecs" {
   name              = "${var.name}/ecs/" 
-  retention_in_days = 7
+  retention_in_days = 7 #7일 후 삭제
 }
 
 
@@ -46,14 +48,6 @@ resource "aws_security_group" "alb_sg" {
     to_port     = 80
     protocol    = "tcp"
     prefix_list_ids = [data.aws_ec2_managed_prefix_list.cloudfront.id]
-  }
-
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "Allow HTTPS"
   }
 
   egress {
@@ -100,43 +94,9 @@ resource "aws_security_group" "ecs_node_sg" {
   tags = { Name = "${var.name}-ecs-node-sg" }
 }
 
-# ==============================================================================
-# 2. ACM & Route53 (도메인 인증)
-# ==============================================================================
-
-resource "aws_acm_certificate" "cert" {
-  domain_name       = var.domain_name
-  validation_method = "DNS"
-
-  tags = { Name = "${var.name}-acm-cert" }
-
-  lifecycle { create_before_destroy = true }
-}
-
-resource "aws_route53_record" "cert_validation" {
-  for_each = {
-    for dvo in aws_acm_certificate.cert.domain_validation_options : dvo.domain_name => {
-      name   = dvo.resource_record_name
-      record = dvo.resource_record_value
-      type   = dvo.resource_record_type
-    }
-  }
-
-  allow_overwrite = true
-  name            = each.value.name
-  records         = [each.value.record]
-  ttl             = 60
-  type            = each.value.type
-  zone_id         = var.route53_zone_id
-}
-
-resource "aws_acm_certificate_validation" "cert" {
-  certificate_arn         = aws_acm_certificate.cert.arn
-  validation_record_fqdns = [for record in aws_route53_record.cert_validation : record.fqdn]
-}
 
 # ==============================================================================
-# 3. ALB & Target Group
+# 2. ALB & Target Group
 # ==============================================================================
 
 resource "aws_lb" "main" {
@@ -149,12 +109,12 @@ resource "aws_lb" "main" {
   tags = { Name = "${var.name}-lb" }
 }
 
-resource "aws_lb_target_group" "app_tg" {
+resource "aws_lb_target_group" "lb_tg" {
   name        = "${var.name}-tg"
   port        = 80
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
-  target_type = "instance" # ECS EC2(Bridge) 모드는 instance 타입 필수
+  target_type = "instance" # ECS EC2모드는 instance 타입 필수
 
   health_check {
     path                = "/" # 혹은 /actuator/health
@@ -176,28 +136,16 @@ resource "aws_lb_listener" "http" {
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.app_tg.arn
-  }
-}
-
-resource "aws_lb_listener" "https" {
-  load_balancer_arn = aws_lb.main.arn
-  port              = "443"
-  protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-2016-08"
-  certificate_arn   = aws_acm_certificate_validation.cert.certificate_arn
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.app_tg.arn
+    target_group_arn = aws_lb_target_group.lb_tg.arn
   }
 }
 
 # ==============================================================================
-# 4. IAM Roles (ECS Node & Task Roles & ssm & SSM Parameter Store)
+# 3. IAM Roles (ECS Node & Task Roles & ssm & SSM Parameter Store)
 # ==============================================================================
 
-# 4-1. EC2 Instance Role (ECS Agent)
+# 3-1. EC2 Instance Role (ECS Agent)
+# ECS 에이전트용 역할
 resource "aws_iam_role" "ecs_instance_role" {
   name = "${var.name}-ecs-instance-role"
   assume_role_policy = jsonencode({
@@ -224,7 +172,7 @@ resource "aws_iam_instance_profile" "ecs_instance_profile" {
   role = aws_iam_role.ecs_instance_role.name
 }
 
-# 4-2. ECS Task Execution Role (이미지 Pull, 로그 저장)
+# 3-2. ECS Task Execution Role (이미지 Pull, 로그 저장)
 resource "aws_iam_role" "ecs_exec_role" {
   name = "${var.name}-ecs-exec-role"
   assume_role_policy = jsonencode({
@@ -241,7 +189,7 @@ resource "aws_iam_role_policy_attachment" "ecs_exec_role_attach" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# 4-3. ECS Task Role (앱이 S3 접근할 권한)
+# 3-3. ECS Task Role (앱이 S3 접근할 권한)
 resource "aws_iam_role" "ecs_task_role" {
   name = "${var.name}-ecs-task-role"
   assume_role_policy = jsonencode({
@@ -337,7 +285,7 @@ resource "aws_iam_role_policy_attachment" "ecs_exec_ssm_read_attach" {
 }
 
 # ==============================================================================
-# 5. ECS Cluster & Compute (Cluster, LT, ASG, CP)
+# 4. ECS Cluster & Compute (Cluster, LT, ASG, CP)
 # ==============================================================================
 
 resource "aws_ecs_cluster" "main" {
@@ -377,9 +325,10 @@ resource "aws_autoscaling_group" "ecs_asg" {
   max_size            = var.asg_max
   min_size            = var.asg_min
   desired_capacity    = var.asg_desired
-
-  protect_from_scale_in = true # Capacity Provider 사용 시 필수
-
+  
+  # ASG가 컨테이너가 존재하는지 모르고 EC2를 삭제하는 것을 방지
+  protect_from_scale_in = true 
+  
   launch_template {
     id      = aws_launch_template.ecs_lt.id
     version = "$Latest"
@@ -417,12 +366,12 @@ resource "aws_ecs_cluster_capacity_providers" "main" {
 }
 
 # ==============================================================================
-# 6. ECS Task & Service
+# 5. ECS Task & Service
 # ==============================================================================
 
 resource "aws_ecs_task_definition" "app" {
   family                   = "${var.name}-task"
-  network_mode             = "bridge" # EC2 모드 전용
+  network_mode             = "bridge" 
   requires_compatibilities = ["EC2"]
   cpu                      = var.cpu
   memory                   = var.memory
@@ -440,7 +389,7 @@ resource "aws_ecs_task_definition" "app" {
       portMappings = [
         {
           containerPort = var.container_port
-          hostPort      = 0    # 랜덤 포트 (Dynamic Port Mapping)
+          hostPort      = 0    # 동적포트
           protocol      = "tcp"
         }
       ],
@@ -460,16 +409,23 @@ resource "aws_ecs_service" "main" {
   name            = "${var.name}-service"
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.app.arn
-  desired_count   = 1
+  desired_count   = var.desired_count
   launch_type     = "EC2"
   enable_execute_command = true # 컨테이너 내부 접속(exec) 기능 활성화 (ssm)
   # 로드밸런서 연결
   load_balancer {
-    target_group_arn = aws_lb_target_group.app_tg.arn
+    target_group_arn = aws_lb_target_group.lb_tg.arn
     container_name   = "${var.name}-container"
     container_port   = var.container_port
   }
 
   # 순서 보장 (Listener가 없으면 배포 실패함)
-  depends_on = [aws_lb_listener.https]
+  depends_on = [aws_lb_listener.http]
+
+  lifecycle {
+    # 오토스케일링과 테라폼 사용 시 필수
+    # Terraform이 desired_count 변경을 감지하지 않게 함
+    # 오토스케일링으로 인스턴스 늘어나고 재배포시 desired_count 갯수로 고정하는 문제 해결
+    ignore_changes = [desired_count]
+  }
 }

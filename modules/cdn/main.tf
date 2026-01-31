@@ -87,7 +87,7 @@ resource "aws_cloudfront_distribution" "cdn" {
     target_origin_id = "ALB-Origin"
 
     # WAS는 보통 캐시를 끄거나, 모든 헤더를 넘겨야 함 (Managed-CachingDisabled 정책 사용 권장)
-    # 아래 ID는 AWS가 미리 만들어둔 'CachingDisabled' 정책 ID임
+    # 아래 ID는 AWS가 미리 만들어둔 '캐시 사용 x' 정책 ID임
     cache_policy_id          = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
     origin_request_policy_id = "216adef6-5c7f-47e4-b989-5492eafa07d3" # AllViewer (모든 헤더 전달)
 
@@ -109,11 +109,11 @@ resource "aws_cloudfront_distribution" "cdn" {
     # origin_request_policy_id = "88a5eaf4-2fd4-4709-b370-b4c24c8f58b9"
 
     viewer_protocol_policy = "redirect-to-https"
-    compress               = true
+    compress               = true # 압축 전달
   }
 
   # 전 세계 엣지 로케이션 사용 (가격 등급)
-  price_class = "PriceClass_200" # 아시아 위치 엣지 로케이션
+  price_class = "PriceClass_200" # 아시아 위치 엣지 로케이션만 사용
 
   # SSL 인증서 연결
   viewer_certificate {
@@ -162,7 +162,7 @@ resource "aws_s3_bucket" "static_bucket" {
   bucket = var.bucket_name
 }
 
-# (중요) 퍼블릭 액세스 차단 설정 (이걸 붙여야 진짜 안심!)
+# 퍼블릭 액세스 차단 설정
 resource "aws_s3_bucket_public_access_block" "static_bucket_block" {
   bucket = aws_s3_bucket.static_bucket.id
 

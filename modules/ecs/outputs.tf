@@ -1,12 +1,7 @@
-# 1. 서비스 접속 주소 (가장 중요)
+# 1. 서비스 접속 주소 
 output "alb_dns_name" {
   description = "The DNS name of the ALB"
   value       = aws_lb.main.dns_name
-}
-
-output "service_url" {
-  description = "Full Service URL (HTTPS)"
-  value       = "https://${var.domain_name}"
 }
 
 # 2. ECS 정보 (디버깅용)

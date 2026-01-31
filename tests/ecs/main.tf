@@ -78,10 +78,6 @@ module "ecs" {
   public_subnet_ids  = module.vpc.public_subnet_ids
   private_subnet_ids = module.vpc.was_subnet_ids # ECS 노드가 배치될 Private Subnet
 
-  # [도메인 및 인증서]
-  domain_name     = "api.dailoapp.com" # 실제 연결할 서브도메인
-  route53_zone_id = data.aws_route53_zone.selected.zone_id
-
   bucket_name        = local.assets_bucket_name  # IAM 정책 연결용
   ecr_repository_url = module.ecr.repository_url # 이미지 Pull용
 
@@ -97,6 +93,7 @@ module "ecs" {
   cpu    = 512
   memory = 1024
 
+  desired_count = 2
   container_env = [
     {
       name  = "SPRING_DATASOURCE_URL"
