@@ -14,7 +14,9 @@ terraform {
 resource "aws_acm_certificate" "cert" {
   provider          = aws.virginia # 버지니아 provider 강제 지정
   domain_name       = var.domain_name
+  subject_alternative_names = ["*.${var.domain_name}"] 
   validation_method = "DNS"
+
 
   tags = {
     Name = "${var.name}-cloudfront-cert"
@@ -28,12 +30,12 @@ resource "aws_acm_certificate" "cert" {
 # 2. DNS 검증 레코드 (Route53은 전세계 공통이라 서울 provider 써도 됨)
 resource "aws_route53_record" "cert_validation" {
   for_each = {
-    for dvo in aws_acm_certificate.cert.domain_validation_options : dvo.domain_name => {
-      name   = dvo.resource_record_name
-      record = dvo.resource_record_value
-      type   = dvo.resource_record_type
+      for dvo in aws_acm_certificate.cert.domain_validation_options : dvo.domain_name => {
+        name   = dvo.resource_record_name
+        record = dvo.resource_record_value
+        type   = dvo.resource_record_type
+      }
     }
-  }
 
   allow_overwrite = true
   name            = each.value.name
@@ -78,7 +80,7 @@ resource "aws_cloudfront_distribution" "cdn" {
     origin_access_control_id = aws_cloudfront_origin_access_control.s3_oac.id
   }
   # 도메인 이름 연결 
-  aliases = [var.domain_name]
+  aliases = [var.domain_name, "grafana.${var.domain_name}"]
 
   # 기본 캐시 동작 설정 (WAS용 - 로그인 등 동적 기능을 위해 헤더/쿠키 전달)
   default_cache_behavior {
@@ -145,13 +147,25 @@ resource "aws_route53_record" "cdn_alias" {
   }
 }
 
+resource "aws_route53_record" "grafana" {
+  zone_id = var.route53_zone_id
+  name    = "grafana.dailoapp.com" # 서브도메인
+  type    = "A"
+
+  alias {
+    name                   = aws_cloudfront_distribution.cdn.domain_name
+    zone_id                = aws_cloudfront_distribution.cdn.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
 # ------------------------------------------------------------------------------
 # 4. S3 Bucket & OAC (정적 파일용 / 이미지)
 # ------------------------------------------------------------------------------
 
 # OAC 생성 (CloudFront가 S3에 접근하기 위한 보안 자격 증명)
 resource "aws_cloudfront_origin_access_control" "s3_oac" {
-  name                              = "${var.name}-oac"
+  name                              = "${var.name}-s3-oac"
   description                       = "OAC for Static S3"
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always" # 모든 요청에 대해 항상 서명(인증)

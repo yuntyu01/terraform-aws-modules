@@ -31,7 +31,9 @@ locals {
   assets_bucket_name = "dailoapp-test-static-assets-2025"
   db_name            = "testdb"
   db_username        = "admin"
-  db_password        = "TestPassword123!"
+  db_password        = "qwer1234"
+  name = "test"
+  domain_name = "dailoapp.com"
 }
 
 data "aws_route53_zone" "selected" {
@@ -50,7 +52,7 @@ module "vpc" {
   source = "../../modules/vpc"
 
   region   = "ap-northeast-2"
-  name     = "test-vpc"
+  name     = local.name
   vpc_cidr = "10.0.0.0/16"
 
   public_subnet_a_cidr = "10.0.1.0/24"
@@ -69,7 +71,7 @@ module "vpc" {
 module "ecs" {
   source = "../../modules/ecs"
 
-  name   = "test-ecs-app"
+  name   = local.name
   region = "ap-northeast-2" # CloudWatch 로그 등을 위해 사용
 
   ami_id = "ami-0291c43558f414816"
@@ -83,12 +85,12 @@ module "ecs" {
 
   # [EC2 설정]
   key_name      = "test-key" # AWS 콘솔에 등록된 키페어 
-  instance_type = "t3.medium"
+  instance_type = "t3.small"
 
   # [Auto Scaling 설정]
-  asg_min     = 1
-  asg_max     = 2
-  asg_desired = 1
+  asg_min     = 2
+  asg_max     = 3
+  asg_desired = 2
 
   cpu    = 512
   memory = 1024
@@ -131,7 +133,7 @@ module "ecs" {
 module "rds" {
   source = "../../modules/rds"
 
-  name = "test-rds"
+  name = local.name
 
   vpc_id        = module.vpc.vpc_id
   db_subnet_ids = module.vpc.db_subnet_ids
@@ -161,13 +163,57 @@ module "cdn" {
     aws.virginia = aws.virginia
   }
 
-  name = "test-cdn"
+  name = local.name
 
   bucket_name = local.assets_bucket_name
 
-  domain_name     = "dailoapp.com"
+  domain_name     = local.domain_name
   route53_zone_id = data.aws_route53_zone.selected.zone_id
 
   # ECS의 ALB 주소 연결 (동적 콘텐츠 가속용)
   alb_dns_name = module.ecs.alb_dns_name
+}
+
+# ------------------------------------------------------------------------------
+# 5. Monitoring (Grafana) 모듈 테스트
+# ------------------------------------------------------------------------------
+module "monitoring" {
+  source = "../../modules/monitoring" 
+
+  name   = local.name   
+  region = "ap-northeast-2"
+
+  vpc_id    = module.vpc.vpc_id
+  
+  alb_arn   = module.ecs.alb_arn               
+  alb_sg_id = module.ecs.alb_security_group_id 
+  http_listener_arn = module.ecs.http_listener_arn
+
+  cluster_id   = module.ecs.cluster_id
+  cluster_name = module.ecs.ecs_cluster_name   
+  ecs_exec_role_arn = module.ecs.task_exec_role_arn
+  asg_name = module.ecs.asg_name
+  app_log_group_name = module.ecs.log_group_name
+  domain_name     = local.domain_name
+  
+  cpu    = 512  
+  memory = 512 
+
+  grafana_admin_password = "qwer1234!" 
+  
+  rds_endpoint = module.rds.address 
+  db_password  = local.db_password
+
+  discord_webhook_url = "https://discord.com/api/webhooks/1467172573568569456/n84GCaP8aAhFb58M9Oen_ItQRnkLl4yjxyKyUCLV8LeOSvYnIOtO635OTwOTttC5Vh_j"
+  
+  grafana_container_env = [
+    { name = "GF_DATABASE_TYPE", value = "mysql" },
+    { name = "GF_DATABASE_HOST", value = "${module.rds.endpoint}" },
+    { name = "GF_SERVER_ROOT_URL", value = "https://grafana.${local.domain_name}" },
+    { name = "GF_SERVER_DOMAIN", value = "grafana.${local.domain_name}" },
+    { name = "GF_DATABASE_PASSWORD", value = local.db_password },
+    { name = "GF_DATABASE_NAME", value = "grafana" },
+    { name = "GF_DATABASE_USER", value = local.db_username },
+     
+  ]
 }

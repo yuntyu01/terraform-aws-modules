@@ -28,3 +28,4 @@ variable "alb_dns_name" {
   description = "CloudFront의 원본(Origin)으로 사용할 ALB의 DNS 주소"
   type        = string
 }
+

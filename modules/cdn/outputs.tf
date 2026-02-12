@@ -17,3 +17,4 @@ output "cloudfront_hosted_zone_id" {
   description = "CloudFront의 Route53 Zone ID"
   value       = aws_cloudfront_distribution.cdn.hosted_zone_id
 }
+

@@ -28,7 +28,7 @@ data "aws_caller_identity" "current" {}
 
 # CloudWatch Log Group
 resource "aws_cloudwatch_log_group" "ecs" {
-  name              = "${var.name}/ecs/" 
+  name              = "/${var.name}/ecs"
   retention_in_days = 7 #7일 후 삭제
 }
 
@@ -164,13 +164,12 @@ resource "aws_iam_role_policy_attachment" "ecs_instance_role_attach" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
 }
 
-
-
 # EC2용 인스턴스 프로파일
 resource "aws_iam_instance_profile" "ecs_instance_profile" {
   name = "${var.name}-ecs-instance-profile"
   role = aws_iam_role.ecs_instance_role.name
 }
+
 
 # 3-2. ECS Task Execution Role (이미지 Pull, 로그 저장)
 resource "aws_iam_role" "ecs_exec_role" {
@@ -222,6 +221,13 @@ resource "aws_iam_role_policy_attachment" "ecs_task_s3_attach" {
   role       = aws_iam_role.ecs_task_role.name
   policy_arn = aws_iam_policy.s3_access_policy.arn
 }
+
+# CloudWatch Agent 지표 수집 정책
+resource "aws_iam_role_policy_attachment" "ecs_instance_cw_agent_policy" {
+  role       = aws_iam_role.ecs_instance_role.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+}
+
 
 ######### Session Manage (SSM) ################
 # 접속 허용 정책 연결
@@ -310,6 +316,38 @@ resource "aws_launch_template" "ecs_lt" {
   user_data = base64encode(<<-EOF
     #!/bin/bash
     echo ECS_CLUSTER=${aws_ecs_cluster.main.name} >> /etc/ecs/ecs.config
+    # 2. 에이전트 설치
+    sudo yum install -y amazon-cloudwatch-agent
+
+    # 3. 메모리 지표 1개만 수집하는 설정 파일 생성  
+    cat <<'JSON' > /opt/aws/amazon-cloudwatch-agent/bin/config.json
+    {
+      "agent": {
+        "metrics_collection_interval": 60,
+        "run_as_user": "root"
+      },
+      "metrics": {
+        "namespace": "CWAgent",
+        "append_dimensions": {
+          "AutoScalingGroupName": "$${aws:AutoScalingGroupName}",
+          "InstanceId": "$${aws:InstanceId}"
+        },
+        "metrics_collected": {
+          "mem": {
+            "measurement": [ "mem_used_percent" ],
+            "metrics_collection_interval": 60
+          }
+        }
+      }
+    }
+    JSON
+
+    # 4. 에이전트 실행
+    /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+    -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/bin/config.json -s
+    
+    sudo systemctl enable --now amazon-cloudwatch-agent
+    
     EOF
   )
 
@@ -339,6 +377,16 @@ resource "aws_autoscaling_group" "ecs_asg" {
     value               = true
     propagate_at_launch = true
   }
+
+  enabled_metrics = [
+    "GroupMinSize",
+    "GroupMaxSize",
+    "GroupDesiredCapacity",
+    "GroupInServiceInstances",
+    "GroupTotalInstances"
+  ]
+  # "1분 간격" 모니터링
+  metrics_granularity = "1Minute"
 }
 
 resource "aws_ecs_capacity_provider" "main" {
@@ -396,7 +444,7 @@ resource "aws_ecs_task_definition" "app" {
       logConfiguration = {
         logDriver = "awslogs"
         options = {
-          "awslogs-group"         = "${var.name}/ecs/"
+          "awslogs-group"         = "/${var.name}/ecs/"
           "awslogs-region"        = var.region
           "awslogs-stream-prefix" = "ecs"
         }
@@ -427,5 +475,53 @@ resource "aws_ecs_service" "main" {
     # Terraform이 desired_count 변경을 감지하지 않게 함
     # 오토스케일링으로 인스턴스 늘어나고 재배포시 desired_count 갯수로 고정하는 문제 해결
     ignore_changes = [desired_count]
+  }
+}
+
+# ==============================================================================
+# 6. Service Auto Scaling 
+# ==============================================================================
+
+# 1. 오토스케일링 대상 등록 
+resource "aws_appautoscaling_target" "ecs_target" {
+  max_capacity       = 5              # 최대 5개까지 늘어남
+  min_capacity       = 2              # 최소 2개는 유지함
+  resource_id        = "service/${aws_ecs_cluster.main.name}/${aws_ecs_service.main.name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+}
+
+# 2. CPU 기준 정책
+resource "aws_appautoscaling_policy" "ecs_policy_cpu" {
+  name               = "${var.name}-cpu-autoscaling"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.ecs_target.resource_id
+  scalable_dimension = aws_appautoscaling_target.ecs_target.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.ecs_target.service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+    target_value = 70.0 # [기준] 평균 CPU가 70%가 되도록 유지해라
+    
+    scale_in_cooldown  = 300 # 줄일 땐 천천히 (5분)
+    scale_out_cooldown = 60  # 늘릴 땐 빠르게 (1분)
+  }
+}
+
+# 3. 메모리 기준 정책 (메모리가 80% 넘으면 늘려라!)
+resource "aws_appautoscaling_policy" "ecs_policy_memory" {
+  name               = "${var.name}-memory-autoscaling"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.ecs_target.resource_id
+  scalable_dimension = aws_appautoscaling_target.ecs_target.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.ecs_target.service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageMemoryUtilization"
+    }
+    target_value = 80 # [기준] 평균 메모리가 80%가 되도록 유지해라
   }
 }
