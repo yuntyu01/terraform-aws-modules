@@ -204,7 +204,6 @@ module "monitoring" {
   rds_endpoint = module.rds.address 
   db_password  = local.db_password
 
-  discord_webhook_url = "https://discord.com/api/webhooks/1467172573568569456/n84GCaP8aAhFb58M9Oen_ItQRnkLl4yjxyKyUCLV8LeOSvYnIOtO635OTwOTttC5Vh_j"
   
   grafana_container_env = [
     { name = "GF_DATABASE_TYPE", value = "mysql" },

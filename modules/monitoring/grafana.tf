@@ -171,5 +171,10 @@ resource "aws_ecs_service" "grafana" {
     container_name   = "grafana"
     container_port   = 3000
   }
+  # 각 Task를 서로 다른 EC2 인스턴스에 배치하도록 강제
+  placement_constraints {
+    type = "distinctInstance"
+  }
+
   depends_on = [aws_lb_listener_rule.grafana]
 }

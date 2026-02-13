@@ -328,6 +328,11 @@ resource "aws_launch_template" "ecs_lt" {
       },
       "metrics": {
         "namespace": "CWAgent",
+        
+        "aggregation_dimensions": [
+          ["AutoScalingGroupName"]
+        ],
+
         "append_dimensions": {
           "AutoScalingGroupName": "$${aws:AutoScalingGroupName}",
           "InstanceId": "$${aws:InstanceId}"
@@ -467,15 +472,15 @@ resource "aws_ecs_service" "main" {
     container_port   = var.container_port
   }
 
-  # 순서 보장 (Listener가 없으면 배포 실패함)
-  depends_on = [aws_lb_listener.http]
-
   lifecycle {
     # 오토스케일링과 테라폼 사용 시 필수
     # Terraform이 desired_count 변경을 감지하지 않게 함
     # 오토스케일링으로 인스턴스 늘어나고 재배포시 desired_count 갯수로 고정하는 문제 해결
     ignore_changes = [desired_count]
   }
+
+  # 순서 보장 (Listener가 없으면 배포 실패함)
+  depends_on = [aws_lb_listener.http]
 }
 
 # ==============================================================================
