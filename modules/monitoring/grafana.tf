@@ -81,7 +81,7 @@ locals {
   init_command = [
     "/bin/sh",
     "-c",
-    "apk add --no-cache mysql-client && mysql -h ${var.rds_endpoint} -u admin -p'${var.db_password}' -e \"CREATE DATABASE IF NOT EXISTS grafana;\""
+    "apk add --no-cache mysql-client && mysql -h ${var.rds_endpoint} -u ${var.db_username} -p'${var.db_password}' -e \"CREATE DATABASE IF NOT EXISTS grafana;\""
   ]
 }
 

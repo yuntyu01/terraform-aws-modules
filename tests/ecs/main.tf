@@ -203,7 +203,7 @@ module "monitoring" {
   
   rds_endpoint = module.rds.address 
   db_password  = local.db_password
-
+  db_username   = local.db_username
   
   grafana_container_env = [
     { name = "GF_DATABASE_TYPE", value = "mysql" },

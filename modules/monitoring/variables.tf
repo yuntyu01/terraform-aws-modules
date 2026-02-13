@@ -109,3 +109,7 @@ variable "rds_endpoint" {
 variable "db_password" { # Init 컨테이너가 DB 접속할 때 필요
   type = string
 }
+
+variable "db_username" { # Init 컨테이너가 DB 접속할 때 필요
+  type = string
+}
