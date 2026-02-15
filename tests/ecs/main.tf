@@ -33,16 +33,24 @@ locals {
   db_username        = "admin"
   db_password        = "qwer1234"
   name = "test"
-  domain_name = "dailoapp.com"
+  domain_name = "test.dailoapp.com"
 }
 
 data "aws_route53_zone" "selected" {
-  name = "dailoapp.com"
+  name         = "dailoapp.com"
+  private_zone = false
 }
 
 module "ecr" {
   source = "../../global/ecr"
   name   = "test-server"
+}
+
+data "aws_acm_certificate" "global_cert" {
+  provider    = aws.virginia
+  domain      = "dailoapp.com"
+  statuses    = ["ISSUED"]
+  most_recent = true
 }
 
 # ------------------------------------------------------------------------------
@@ -159,19 +167,15 @@ module "rds" {
 module "cdn" {
   source = "../../modules/cdn"
 
-  providers = {
-    aws.virginia = aws.virginia
-  }
-
   name = local.name
-
   bucket_name = local.assets_bucket_name
-
   domain_name     = local.domain_name
-  route53_zone_id = data.aws_route53_zone.selected.zone_id
-
-  # ECS의 ALB 주소 연결 (동적 콘텐츠 가속용)
+  static_path_pattern = "/static/*"
   alb_dns_name = module.ecs.alb_dns_name
+
+  route53_zone_id = data.aws_route53_zone.selected.zone_id
+  cloudfront_cert_arn = data.aws_acm_certificate.global_cert.arn
+
 }
 
 # ------------------------------------------------------------------------------
@@ -204,12 +208,13 @@ module "monitoring" {
   rds_endpoint = module.rds.address 
   db_password  = local.db_password
   db_username   = local.db_username
+  discord_webhook_url = var.discord_webhook_url
   
   grafana_container_env = [
     { name = "GF_DATABASE_TYPE", value = "mysql" },
     { name = "GF_DATABASE_HOST", value = "${module.rds.endpoint}" },
-    { name = "GF_SERVER_ROOT_URL", value = "https://grafana.${local.domain_name}" },
-    { name = "GF_SERVER_DOMAIN", value = "grafana.${local.domain_name}" },
+    { name = "GF_SERVER_ROOT_URL", value = "https://${local.domain_name}/grafana/" },
+    { name = "GF_SERVER_SERVE_FROM_SUB_PATH", value = "true" },
     { name = "GF_DATABASE_PASSWORD", value = local.db_password },
     { name = "GF_DATABASE_NAME", value = "grafana" },
     { name = "GF_DATABASE_USER", value = local.db_username },

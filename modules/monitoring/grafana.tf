@@ -56,16 +56,16 @@ resource "aws_lb_target_group" "grafana_tg" {
 
 resource "aws_lb_listener_rule" "grafana" {
   listener_arn = var.http_listener_arn
-  
+  priority     = 10
   action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.grafana_tg.arn
   }
 
   condition {
-    host_header {
-      values = ["grafana.${var.domain_name}"] 
-      }
+    path_pattern {
+      values = ["/grafana/*"]
+    }
   }
 }
 

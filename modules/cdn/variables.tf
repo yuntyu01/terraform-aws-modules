@@ -29,3 +29,13 @@ variable "alb_dns_name" {
   type        = string
 }
 
+# global에서 만든 CloudFront용 ACM ARN (us-east-1)
+variable "cloudfront_cert_arn" {
+  type = string
+}
+
+# /static/* 경로
+variable "static_path_pattern" {
+  type    = string
+  default = "/static/*"
+}
