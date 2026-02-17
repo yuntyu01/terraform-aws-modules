@@ -312,7 +312,14 @@ resource "aws_launch_template" "ecs_lt" {
     associate_public_ip_address = false
     security_groups             = [aws_security_group.ecs_node_sg.id]
   }
-
+#     # 💡 [핵심 추가] yum 잠금(lock)이 풀릴 때까지 대기 및 네트워크 확인
+#     echo "Waiting for yum lock to be released..."
+#     while fuser /var/lib/rpm/.rpm.lock >/dev/null 2>&1; do sleep 5; done
+    
+#     # 💡 [핵심 추가] 설치 실패 시 최대 5번 재시도 로직
+#     for i in {1..5}; do
+#       sudo yum install -y amazon-cloudwatch-agent && break || sleep 10
+#     done
   user_data = base64encode(<<-EOF
     #!/bin/bash
     echo ECS_CLUSTER=${aws_ecs_cluster.main.name} >> /etc/ecs/ecs.config
@@ -449,7 +456,7 @@ resource "aws_ecs_task_definition" "app" {
       logConfiguration = {
         logDriver = "awslogs"
         options = {
-          "awslogs-group"         = "/${var.name}/ecs/"
+          "awslogs-group"         = aws_cloudwatch_log_group.ecs.name
           "awslogs-region"        = var.region
           "awslogs-stream-prefix" = "ecs"
         }

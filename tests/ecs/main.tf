@@ -28,7 +28,7 @@ provider "aws" {
 # 1. Global & Base Resources
 # ------------------------------------------------------------------------------
 locals {
-  assets_bucket_name = "dailoapp-test-static-assets-2025"
+  static_bucket_name = "dailoapp-test-static-assets-2025"
   db_name            = "testdb"
   db_username        = "admin"
   db_password        = "qwer1234"
@@ -88,7 +88,7 @@ module "ecs" {
   public_subnet_ids  = module.vpc.public_subnet_ids
   private_subnet_ids = module.vpc.was_subnet_ids # ECS 노드가 배치될 Private Subnet
 
-  bucket_name        = local.assets_bucket_name  # IAM 정책 연결용
+  bucket_name        = local.static_bucket_name  # IAM 정책 연결용
   ecr_repository_url = module.ecr.repository_url # 이미지 Pull용
 
   # [EC2 설정]
@@ -123,7 +123,7 @@ module "ecs" {
     },
     {
       name  = "AWS_S3_BUCKET"
-      value = local.assets_bucket_name
+      value = local.static_bucket_name
     }
   ]
 
@@ -168,7 +168,7 @@ module "cdn" {
   source = "../../modules/cdn"
 
   name = local.name
-  bucket_name = local.assets_bucket_name
+  bucket_name = local.static_bucket_name
   domain_name     = local.domain_name
   static_path_pattern = "/static/*"
   alb_dns_name = module.ecs.alb_dns_name
