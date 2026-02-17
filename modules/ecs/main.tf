@@ -117,7 +117,7 @@ resource "aws_lb_target_group" "lb_tg" {
   target_type = "instance" # ECS EC2모드는 instance 타입 필수
 
   health_check {
-    path                = "/" # 혹은 /actuator/health
+    path                = "/health" # 혹은 /actuator/health
     protocol            = "HTTP"
     interval            = 30
     timeout             = 5
