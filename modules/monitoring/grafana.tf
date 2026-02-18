@@ -45,7 +45,7 @@ resource "aws_lb_target_group" "grafana_tg" {
   target_type = "instance" 
 
   health_check {
-    path                = "/api/health" 
+    path                = "/grafana/api/health" 
     matcher             = "200"
     interval            = 30
     timeout             = 5
