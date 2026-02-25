@@ -32,8 +32,9 @@ locals {
   db_name            = "testdb"
   db_username        = "admin"
   db_password        = "qwer1234"
-  name = "test"
-  domain_name = "test.dailoapp.com"
+  name               = "test"
+  domain_name        = "test.dailoapp.com"
+  alb_verify_secret  = "test-dailo"
 }
 
 data "aws_route53_zone" "selected" {
@@ -133,6 +134,9 @@ module "ecs" {
       valueFrom = module.rds.ssm_db_password_arn
     }
   ]
+
+  alb_verify_secret = local.alb_verify_secret
+
 }
 
 # ------------------------------------------------------------------------------
@@ -167,49 +171,50 @@ module "rds" {
 module "cdn" {
   source = "../../modules/cdn"
 
-  name = local.name
-  bucket_name = local.static_bucket_name
-  domain_name     = local.domain_name
+  name                = local.name
+  bucket_name         = local.static_bucket_name
+  domain_name         = local.domain_name
   static_path_pattern = "/static/*"
-  alb_dns_name = module.ecs.alb_dns_name
+  alb_dns_name        = module.ecs.alb_dns_name
 
-  route53_zone_id = data.aws_route53_zone.selected.zone_id
+  route53_zone_id     = data.aws_route53_zone.selected.zone_id
   cloudfront_cert_arn = data.aws_acm_certificate.global_cert.arn
 
+  alb_verify_secret = local.alb_verify_secret
 }
 
 # ------------------------------------------------------------------------------
 # 5. Monitoring (Grafana) 모듈 테스트
 # ------------------------------------------------------------------------------
 module "monitoring" {
-  source = "../../modules/monitoring" 
+  source = "../../modules/monitoring"
 
-  name   = local.name   
+  name   = local.name
   region = "ap-northeast-2"
 
-  vpc_id    = module.vpc.vpc_id
-  
-  alb_arn   = module.ecs.alb_arn               
-  alb_sg_id = module.ecs.alb_security_group_id 
+  vpc_id = module.vpc.vpc_id
+
+  alb_arn           = module.ecs.alb_arn
+  alb_sg_id         = module.ecs.alb_security_group_id
   http_listener_arn = module.ecs.http_listener_arn
 
-  cluster_id   = module.ecs.cluster_id
-  cluster_name = module.ecs.ecs_cluster_name   
-  ecs_exec_role_arn = module.ecs.task_exec_role_arn
-  asg_name = module.ecs.asg_name
+  cluster_id         = module.ecs.cluster_id
+  cluster_name       = module.ecs.ecs_cluster_name
+  ecs_exec_role_arn  = module.ecs.task_exec_role_arn
+  asg_name           = module.ecs.asg_name
   app_log_group_name = module.ecs.log_group_name
-  domain_name     = local.domain_name
-  
-  cpu    = 512  
-  memory = 512 
+  domain_name        = local.domain_name
 
-  grafana_admin_password = "qwer1234!" 
-  
-  rds_endpoint = module.rds.address 
-  db_password  = local.db_password
-  db_username   = local.db_username
+  cpu    = 512
+  memory = 512
+
+  grafana_admin_password = "qwer1234!"
+
+  rds_endpoint        = module.rds.address
+  db_password         = local.db_password
+  db_username         = local.db_username
   discord_webhook_url = var.discord_webhook_url
-  
+
   grafana_container_env = [
     { name = "GF_DATABASE_TYPE", value = "mysql" },
     { name = "GF_DATABASE_HOST", value = "${module.rds.endpoint}" },
@@ -218,6 +223,6 @@ module "monitoring" {
     { name = "GF_DATABASE_PASSWORD", value = local.db_password },
     { name = "GF_DATABASE_NAME", value = "grafana" },
     { name = "GF_DATABASE_USER", value = local.db_username },
-     
+
   ]
 }

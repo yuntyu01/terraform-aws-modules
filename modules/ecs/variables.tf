@@ -135,3 +135,9 @@ variable "desired_count" {
   type        = number
   default     = 2 
 }
+
+variable "alb_verify_secret"{
+  description = "http 보안을 위한 X-origin-verify 비밀변수"
+  type        = string
+  sensitive   = true
+}

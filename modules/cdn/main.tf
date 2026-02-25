@@ -60,6 +60,12 @@ resource "aws_cloudfront_distribution" "cdn" {
       origin_protocol_policy = "http-only"
       origin_ssl_protocols   = ["TLSv1.2"]
     }
+
+    # ALB와 통신할 때만 사용하는 비밀 암호표
+    custom_header {
+      name  = "X-Origin-Verify"
+      value = var.alb_verify_secret
+    }
   }
 
   origin {
@@ -75,6 +81,7 @@ resource "aws_cloudfront_distribution" "cdn" {
     target_origin_id         = "ALB-Origin"
     allowed_methods          = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
     cached_methods           = ["GET", "HEAD"]
+    # 캐시 비활성화 (api 서버이기에 기본적으로 비활성화)
     cache_policy_id          = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
     origin_request_policy_id = "216adef6-5c7f-47e4-b989-5492eafa07d3"
     viewer_protocol_policy   = "redirect-to-https"
@@ -87,21 +94,9 @@ resource "aws_cloudfront_distribution" "cdn" {
     target_origin_id       = "S3-Static-Origin"
     allowed_methods        = ["GET", "HEAD"]
     cached_methods         = ["GET", "HEAD"]
-    cache_policy_id        = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+    cache_policy_id        = "658327ea-f89d-4fab-a63d-7e88639e58f6" # 캐시 최적화
     viewer_protocol_policy = "redirect-to-https"
     compress               = true
-  }
-
-  # Grafana: ALB
-  ordered_cache_behavior {
-    path_pattern             = "/grafana/*"
-    target_origin_id         = "ALB-Origin"
-    allowed_methods          = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
-    cached_methods           = ["GET", "HEAD"]
-    cache_policy_id          = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
-    origin_request_policy_id = "216adef6-5c7f-47e4-b989-5492eafa07d3"
-    viewer_protocol_policy   = "redirect-to-https"
-    compress                 = true
   }
 
   price_class = "PriceClass_200"

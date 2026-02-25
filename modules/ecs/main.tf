@@ -129,14 +129,36 @@ resource "aws_lb_target_group" "lb_tg" {
   tags = { Name = "${var.name}-tg" }
 }
 
+# 1) HTTP 리스너: 기본적으로 403에러 설정
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
 
   default_action {
+    type = "fixed-response"
+    fixed_response {
+      content_type = "text/plain"
+      message_body = "Access Denied: Direct access is not allowed. Please use CloudFront."
+      status_code  = "403"
+    }
+  }
+}
+# 2) HTTP 리스너 규칙: 비밀 헤더가 일치할 때만 타겟 그룹으로 포워딩
+resource "aws_lb_listener_rule" "verify_cloudfront_http" {
+  listener_arn = aws_lb_listener.http.arn
+  priority     = 100 # 우선순위 (낮을수록 먼저 검사)
+
+  action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.lb_tg.arn
+  }
+
+  condition {
+    http_header {
+      http_header_name = "X-Origin-Verify"
+      values           = [var.alb_verify_secret] # 변수로 관리되는 비밀 암호표
+    }
   }
 }
 
