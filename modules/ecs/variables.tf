@@ -141,3 +141,9 @@ variable "alb_verify_secret"{
   type        = string
   sensitive   = true
 }
+
+variable "image_tag" {
+  description = "ECR 이미지 태그"
+  type        = string
+  default     = "latest"  # 로컬 테스트용 
+}

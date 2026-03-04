@@ -4,6 +4,7 @@
 # 3. IAM Roles (ECS Node & Task Roles & ssm)
 # 4. ECS Cluster & Compute (Cluster, LT, ASG, CP)
 # 5. ECS Task & Service
+# 6. Service Auto Scaling
 
 terraform {
   required_providers {
@@ -44,9 +45,9 @@ resource "aws_security_group" "alb_sg" {
   vpc_id      = var.vpc_id
 
   ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
     prefix_list_ids = [data.aws_ec2_managed_prefix_list.cloudfront.id]
   }
 
@@ -80,7 +81,7 @@ resource "aws_security_group" "ecs_node_sg" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] 
+    cidr_blocks = ["0.0.0.0/0"]
     description = "Allow SSH"
   }
 
@@ -163,7 +164,7 @@ resource "aws_lb_listener_rule" "verify_cloudfront_http" {
 }
 
 # ==============================================================================
-# 3. IAM Roles (ECS Node & Task Roles & ssm & SSM Parameter Store)
+# 3. IAM Roles (ECS Node & Task Roles & ssm)
 # ==============================================================================
 
 # 3-1. EC2 Instance Role (ECS Agent)
@@ -173,8 +174,8 @@ resource "aws_iam_role" "ecs_instance_role" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
       Principal = { Service = "ec2.amazonaws.com" }
     }]
   })
@@ -199,8 +200,8 @@ resource "aws_iam_role" "ecs_exec_role" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
       Principal = { Service = "ecs-tasks.amazonaws.com" }
     }]
   })
@@ -216,8 +217,8 @@ resource "aws_iam_role" "ecs_task_role" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
       Principal = { Service = "ecs-tasks.amazonaws.com" }
     }]
   })
@@ -323,7 +324,7 @@ resource "aws_ecs_cluster" "main" {
 resource "aws_launch_template" "ecs_lt" {
   name_prefix   = "${var.name}-ecs-lt"
   image_id      = var.ami_id
-  instance_type = var.instance_type 
+  instance_type = var.instance_type
   key_name      = var.key_name
 
   iam_instance_profile {
@@ -334,14 +335,14 @@ resource "aws_launch_template" "ecs_lt" {
     associate_public_ip_address = false
     security_groups             = [aws_security_group.ecs_node_sg.id]
   }
-#     # 💡 [핵심 추가] yum 잠금(lock)이 풀릴 때까지 대기 및 네트워크 확인
-#     echo "Waiting for yum lock to be released..."
-#     while fuser /var/lib/rpm/.rpm.lock >/dev/null 2>&1; do sleep 5; done
-    
-#     # 💡 [핵심 추가] 설치 실패 시 최대 5번 재시도 로직
-#     for i in {1..5}; do
-#       sudo yum install -y amazon-cloudwatch-agent && break || sleep 10
-#     done
+  #     # 💡 [핵심 추가] yum 잠금(lock)이 풀릴 때까지 대기 및 네트워크 확인
+  #     echo "Waiting for yum lock to be released..."
+  #     while fuser /var/lib/rpm/.rpm.lock >/dev/null 2>&1; do sleep 5; done
+
+  #     # 💡 [핵심 추가] 설치 실패 시 최대 5번 재시도 로직
+  #     for i in {1..5}; do
+  #       sudo yum install -y amazon-cloudwatch-agent && break || sleep 10
+  #     done
   user_data = base64encode(<<-EOF
     #!/bin/bash
     echo ECS_CLUSTER=${aws_ecs_cluster.main.name} >> /etc/ecs/ecs.config
@@ -387,7 +388,7 @@ resource "aws_launch_template" "ecs_lt" {
 
   tag_specifications {
     resource_type = "instance"
-    tags = { Name = "${var.name}-ecs-node" }
+    tags          = { Name = "${var.name}-ecs-node" }
   }
 }
 
@@ -397,10 +398,10 @@ resource "aws_autoscaling_group" "ecs_asg" {
   max_size            = var.asg_max
   min_size            = var.asg_min
   desired_capacity    = var.asg_desired
-  
+
   # ASG가 컨테이너가 존재하는지 모르고 EC2를 삭제하는 것을 방지
-  protect_from_scale_in = true 
-  
+  protect_from_scale_in = true
+
   launch_template {
     id      = aws_launch_template.ecs_lt.id
     version = "$Latest"
@@ -453,7 +454,7 @@ resource "aws_ecs_cluster_capacity_providers" "main" {
 
 resource "aws_ecs_task_definition" "app" {
   family                   = "${var.name}-task"
-  network_mode             = "bridge" 
+  network_mode             = "bridge"
   requires_compatibilities = ["EC2"]
   cpu                      = var.cpu
   memory                   = var.memory
@@ -463,15 +464,15 @@ resource "aws_ecs_task_definition" "app" {
   container_definitions = jsonencode([
     {
       name      = "${var.name}-container"
-      image     = "${var.ecr_repository_url}:latest"
+      image     = "${var.ecr_repository_url}:${var.image_tag}"
       essential = true
 
       environment = var.container_env
-      secrets = var.container_secrets
+      secrets     = var.container_secrets
       portMappings = [
         {
           containerPort = var.container_port
-          hostPort      = 0    # 동적포트
+          hostPort      = 0 # 동적포트
           protocol      = "tcp"
         }
       ],
@@ -488,11 +489,11 @@ resource "aws_ecs_task_definition" "app" {
 }
 
 resource "aws_ecs_service" "main" {
-  name            = "${var.name}-service"
-  cluster         = aws_ecs_cluster.main.id
-  task_definition = aws_ecs_task_definition.app.arn
-  desired_count   = var.desired_count
-  launch_type     = "EC2"
+  name                   = "${var.name}-service"
+  cluster                = aws_ecs_cluster.main.id
+  task_definition        = aws_ecs_task_definition.app.arn
+  desired_count          = var.desired_count
+  launch_type            = "EC2"
   enable_execute_command = true # 컨테이너 내부 접속(exec) 기능 활성화 (ssm)
   # 로드밸런서 연결
   load_balancer {
@@ -505,7 +506,8 @@ resource "aws_ecs_service" "main" {
     # 오토스케일링과 테라폼 사용 시 필수
     # Terraform이 desired_count 변경을 감지하지 않게 함
     # 오토스케일링으로 인스턴스 늘어나고 재배포시 desired_count 갯수로 고정하는 문제 해결
-    ignore_changes = [desired_count]
+    # "테라폼이 이미지 버전(작업 정의서) 바뀌는 걸 신경쓰지 않음(CI/CD가 함)
+    ignore_changes = [desired_count, task_definition]
   }
 
   # 순서 보장 (Listener가 없으면 배포 실패함)
@@ -518,8 +520,8 @@ resource "aws_ecs_service" "main" {
 
 # 1. 오토스케일링 대상 등록 
 resource "aws_appautoscaling_target" "ecs_target" {
-  max_capacity       = 5              # 최대 5개까지 늘어남
-  min_capacity       = 2              # 최소 2개는 유지함
+  max_capacity       = 5 # 최대 5개까지 늘어남
+  min_capacity       = 2 # 최소 2개는 유지함
   resource_id        = "service/${aws_ecs_cluster.main.name}/${aws_ecs_service.main.name}"
   scalable_dimension = "ecs:service:DesiredCount"
   service_namespace  = "ecs"
@@ -538,13 +540,13 @@ resource "aws_appautoscaling_policy" "ecs_policy_cpu" {
       predefined_metric_type = "ECSServiceAverageCPUUtilization"
     }
     target_value = 70.0 # [기준] 평균 CPU가 70%가 되도록 유지해라
-    
+
     scale_in_cooldown  = 300 # 줄일 땐 천천히 (5분)
     scale_out_cooldown = 60  # 늘릴 땐 빠르게 (1분)
   }
 }
 
-# 3. 메모리 기준 정책 (메모리가 80% 넘으면 늘려라!)
+# 3. 메모리 기준 정책 (메모리가 80% 넘으면 늘려라)
 resource "aws_appautoscaling_policy" "ecs_policy_memory" {
   name               = "${var.name}-memory-autoscaling"
   policy_type        = "TargetTrackingScaling"

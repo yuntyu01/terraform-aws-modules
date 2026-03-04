@@ -1,8 +1,8 @@
-# modules/cdn/main.tf
+# 1. S3 버킷 & 접근 제어
+# 2. CloudFront 배포
+# 3. Route53 Alias 연결
 
-# (provider 선언은 모듈 내부에 하지 않는 것이 정석이므로 제거함)
-
-# 1. S3 버킷 & 보안 설정
+# 1. S3 버킷 & 접근 제어
 resource "aws_s3_bucket" "static_bucket" {
   bucket = var.bucket_name
 }
@@ -44,7 +44,7 @@ resource "aws_s3_bucket_policy" "static_policy" {
   policy = data.aws_iam_policy_document.s3_oac_policy.json
 }
 
-# 2. CloudFront 배포 (외부에서 주입받은 인증서 ARN 사용)
+# 2. CloudFront 배포
 resource "aws_cloudfront_distribution" "cdn" {
   enabled             = true
   is_ipv6_enabled     = true
@@ -78,9 +78,9 @@ resource "aws_cloudfront_distribution" "cdn" {
 
   # Default: ALB
   default_cache_behavior {
-    target_origin_id         = "ALB-Origin"
-    allowed_methods          = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
-    cached_methods           = ["GET", "HEAD"]
+    target_origin_id = "ALB-Origin"
+    allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods   = ["GET", "HEAD"]
     # 캐시 비활성화 (api 서버이기에 기본적으로 비활성화)
     cache_policy_id          = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
     origin_request_policy_id = "216adef6-5c7f-47e4-b989-5492eafa07d3"
@@ -114,7 +114,7 @@ resource "aws_cloudfront_distribution" "cdn" {
   }
 }
 
-# 3. Route53 Alias (도메인 연결)
+# 3. Route53 Alias 연결
 resource "aws_route53_record" "cdn_alias" {
   zone_id = var.route53_zone_id
   name    = var.domain_name

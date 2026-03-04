@@ -1,8 +1,13 @@
+# 0. 입력 변수
+# 1. ECR 리포지토리
+# 2. Lifecycle Policy
+
 variable "name" {
   description = "Repository name"
   type        = string
 }
 
+# 1. ECR 리포지토리
 resource "aws_ecr_repository" "main" {
   name                 = var.name
   image_tag_mutability = "MUTABLE" # 태그 덮어쓰기 허용
@@ -20,7 +25,7 @@ resource "aws_ecr_repository" "main" {
   }
 }
 
-# 2. 수명 주기 정책 (Lifecycle Policy)
+# 2. Lifecycle Policy
 resource "aws_ecr_lifecycle_policy" "main" {
   repository = aws_ecr_repository.main.name
 
@@ -30,12 +35,12 @@ resource "aws_ecr_lifecycle_policy" "main" {
       {
         rulePriority = 1
         description  = "Expire dev images older than 14 days"
-        selection    = {
-          tagStatus      = "tagged"
-          tagPrefixList  = ["dev-"]
-          countType      = "sinceImagePushed"
-          countUnit      = "days"
-          countNumber    = 14
+        selection = {
+          tagStatus     = "tagged"
+          tagPrefixList = ["dev-"]
+          countType     = "sinceImagePushed"
+          countUnit     = "days"
+          countNumber   = 14
         }
         action = {
           type = "expire"
@@ -45,7 +50,7 @@ resource "aws_ecr_lifecycle_policy" "main" {
       {
         rulePriority = 2
         description  = "Remove untagged images immediately"
-        selection    = {
+        selection = {
           tagStatus   = "untagged"
           countType   = "sinceImagePushed"
           countUnit   = "days"
@@ -55,7 +60,7 @@ resource "aws_ecr_lifecycle_policy" "main" {
           type = "expire"
         }
       }
-     
+
     ]
   })
 }

@@ -113,10 +113,10 @@ resource "aws_subnet" "db_c" {
 resource "aws_eip" "nat_eip" {
   domain = "vpc"
 
-  tags = { 
-    Name = "${var.name}-nat-eip" 
+  tags = {
+    Name = "${var.name}-nat-eip"
   }
-  
+
   depends_on = [aws_internet_gateway.gw]
 }
 
@@ -197,9 +197,9 @@ resource "aws_route_table_association" "db_c" {
 resource "aws_vpc_endpoint" "s3" {
   vpc_id            = aws_vpc.main.id
   service_name      = "com.amazonaws.${var.region}.s3"
-  vpc_endpoint_type = "Gateway" 
+  vpc_endpoint_type = "Gateway"
 
-  route_table_ids = [aws_route_table.private.id] 
+  route_table_ids = [aws_route_table.private.id]
 
   tags = {
     Name = "${var.name}-s3-endpoint"

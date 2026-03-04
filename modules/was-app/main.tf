@@ -1,3 +1,4 @@
+# 0. Terraform Settings
 # 1. Security Group - 2개 ([Pub]Alb 1개, [Pri]was 1개)
 # 2. ACM & Route53 Validation 
 # 3. ALB & Listener & Target Group - 1개 (Listener - http, TG - was.sg)
@@ -63,11 +64,11 @@ resource "aws_security_group" "was_sg" {
 
   # 인바운드 규칙: ALB에서 오는 HTTP 허용, 테스트용 SSH 허용
   ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
     security_groups = [aws_security_group.alb_sg.id]
-    description = "Allow HTTP only from ALB"
+    description     = "Allow HTTP only from ALB"
   }
 
   ingress {
@@ -100,7 +101,7 @@ resource "aws_security_group" "was_sg" {
 
 # 1) 인증서 발급 요청
 resource "aws_acm_certificate" "cert" {
-  domain_name       = var.domain_name      
+  domain_name       = var.domain_name
   validation_method = "DNS"
 
   tags = {
@@ -122,12 +123,12 @@ resource "aws_route53_record" "cert_validation" {
       type   = dvo.resource_record_type
     }
   }
-  
-  allow_overwrite = true  # 덮어쓰기 허용
-  name            = each.value.name # 레코드 이름
+
+  allow_overwrite = true                # 덮어쓰기 허용
+  name            = each.value.name     # 레코드 이름
   records         = [each.value.record] # 레코드 값
-  ttl             = 60  # 캐시 시간
-  type            = each.value.type # 레코드 타입
+  ttl             = 60                  # 캐시 시간
+  type            = each.value.type     # 레코드 타입
   zone_id         = var.route53_zone_id # Route53 호스팅 영역 ID
 }
 
@@ -238,7 +239,7 @@ resource "aws_iam_policy" "was_s3_policy" {
           "s3:ListBucket"
         ]
         Resource = [
-          "arn:aws:s3:::${var.bucket_name}",       
+          "arn:aws:s3:::${var.bucket_name}",
           "arn:aws:s3:::${var.bucket_name}/*"
         ]
       }
@@ -311,5 +312,4 @@ resource "aws_autoscaling_group" "was_asg" {
     propagate_at_launch = true #ASG가 생성하는 EC2에 tag 붙히기
   }
 }
-
 

@@ -1,3 +1,9 @@
+# 0. Terraform & Provider (us-east-1)
+# 1. Route53 Hosted Zone 조회
+# 2. ACM 인증서 생성
+# 3. DNS 검증 레코드 생성
+# 4. 인증서 검증 완료 대기
+
 terraform {
   required_providers {
     aws = {
