@@ -498,7 +498,7 @@ resource "aws_ecs_service" "main" {
   # 로드밸런서 연결
 
   deployment_minimum_healthy_percent = 50
-  deployment_maximum_percent         = 100
+  deployment_maximum_percent         = 200
   
   load_balancer {
     target_group_arn = aws_lb_target_group.lb_tg.arn
