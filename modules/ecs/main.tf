@@ -496,6 +496,10 @@ resource "aws_ecs_service" "main" {
   launch_type            = "EC2"
   enable_execute_command = true # 컨테이너 내부 접속(exec) 기능 활성화 (ssm)
   # 로드밸런서 연결
+
+  deployment_minimum_healthy_percent = 50
+  deployment_maximum_percent         = 100
+  
   load_balancer {
     target_group_arn = aws_lb_target_group.lb_tg.arn
     container_name   = "${var.name}-container"
