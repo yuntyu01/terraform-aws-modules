@@ -524,8 +524,8 @@ resource "aws_ecs_service" "main" {
 
 # 1. 오토스케일링 대상 등록 
 resource "aws_appautoscaling_target" "ecs_target" {
-  max_capacity       = 5 # 최대 5개까지 늘어남
-  min_capacity       = 2 # 최소 2개는 유지함
+  max_capacity       = var.max_desired_count
+  min_capacity       = var.min_desired_count
   resource_id        = "service/${aws_ecs_cluster.main.name}/${aws_ecs_service.main.name}"
   scalable_dimension = "ecs:service:DesiredCount"
   service_namespace  = "ecs"

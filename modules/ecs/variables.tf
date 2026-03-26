@@ -94,6 +94,24 @@ variable "asg_desired" {
   default     = 1
 }
 
+
+variable "desired_count" {
+  description = "Number of docker containers to run"
+  type        = number
+  default     = 2 
+}
+variable "min_desired_count" {
+  description = "Min Number of docker containers to run"
+  type        = number
+  default     = 2 
+}
+variable "max_desired_count" {
+  description = "Max Number of docker containers to run"
+  type        = number
+  default     = 10 
+}
+
+
 variable "container_env" {
   description = "컨테이너에 주입할 환경변수 리스트 (Key-Value 쌍)"
   type = list(object({
@@ -130,11 +148,6 @@ variable "memory" {
 }
 
 
-variable "desired_count" {
-  description = "Number of docker containers to run"
-  type        = number
-  default     = 2 
-}
 
 variable "alb_verify_secret"{
   description = "http 보안을 위한 X-origin-verify 비밀변수"
