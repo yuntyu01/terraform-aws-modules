@@ -493,9 +493,14 @@ resource "aws_ecs_service" "main" {
   cluster                = aws_ecs_cluster.main.id
   task_definition        = aws_ecs_task_definition.app.arn
   desired_count          = var.desired_count
-  launch_type            = "EC2"
-  enable_execute_command = true # 컨테이너 내부 접속(exec) 기능 활성화 (ssm)
-  # 로드밸런서 연결
+  enable_execute_command = true
+  force_new_deployment   = true
+
+  capacity_provider_strategy {
+    capacity_provider = aws_ecs_capacity_provider.main.name
+    weight            = 100
+    base              = 1
+  }
 
   deployment_minimum_healthy_percent = 50
   deployment_maximum_percent         = 200
