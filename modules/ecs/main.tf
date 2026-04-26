@@ -399,8 +399,7 @@ resource "aws_autoscaling_group" "ecs_asg" {
   min_size            = var.asg_min
   desired_capacity    = var.asg_desired
 
-  # ASG가 컨테이너가 존재하는지 모르고 EC2를 삭제하는 것을 방지
-  protect_from_scale_in = true
+  protect_from_scale_in = false
 
   launch_template {
     id      = aws_launch_template.ecs_lt.id
@@ -430,10 +429,9 @@ resource "aws_ecs_capacity_provider" "main" {
   auto_scaling_group_provider {
     auto_scaling_group_arn = aws_autoscaling_group.ecs_asg.arn
     managed_scaling {
-      status          = "ENABLED"
-      target_capacity = 100 # 서버 가동률 목표치
+      status = "DISABLED"
     }
-    managed_termination_protection = "ENABLED" # 서버(ASG) - 컨테이너(CP) 팀킬 방지
+    managed_termination_protection = "DISABLED"
   }
 }
 
@@ -493,18 +491,18 @@ resource "aws_ecs_service" "main" {
   cluster                = aws_ecs_cluster.main.id
   task_definition        = aws_ecs_task_definition.app.arn
   desired_count          = var.desired_count
+  launch_type            = "EC2"
   enable_execute_command = true
   force_new_deployment   = true
 
-  capacity_provider_strategy {
-    capacity_provider = aws_ecs_capacity_provider.main.name
-    weight            = 100
-    base              = 1
+  ordered_placement_strategy {
+    type  = "binpack"
+    field = "memory"
   }
 
   deployment_minimum_healthy_percent = 50
   deployment_maximum_percent         = 200
-  
+
   load_balancer {
     target_group_arn = aws_lb_target_group.lb_tg.arn
     container_name   = "${var.name}-container"
@@ -569,4 +567,56 @@ resource "aws_appautoscaling_policy" "ecs_policy_memory" {
     }
     target_value = 80 # [기준] 평균 메모리가 80%가 되도록 유지해라
   }
+}
+
+# ==============================================================================
+# 7. ASG(EC2) Auto Scaling - 클러스터 메모리 예약률 기반
+# ==============================================================================
+
+resource "aws_cloudwatch_metric_alarm" "cluster_memory_high" {
+  alarm_name          = "${var.name}-cluster-memory-high"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "MemoryReservation"
+  namespace           = "AWS/ECS"
+  period              = 60
+  statistic           = "Average"
+  threshold           = 75
+  alarm_actions       = [aws_autoscaling_policy.scale_out.arn]
+
+  dimensions = {
+    ClusterName = aws_ecs_cluster.main.name
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "cluster_memory_low" {
+  alarm_name          = "${var.name}-cluster-memory-low"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = 5
+  metric_name         = "MemoryReservation"
+  namespace           = "AWS/ECS"
+  period              = 60
+  statistic           = "Average"
+  threshold           = 50
+  alarm_actions       = [aws_autoscaling_policy.scale_in.arn]
+
+  dimensions = {
+    ClusterName = aws_ecs_cluster.main.name
+  }
+}
+
+resource "aws_autoscaling_policy" "scale_out" {
+  name                   = "${var.name}-asg-scale-out"
+  autoscaling_group_name = aws_autoscaling_group.ecs_asg.name
+  adjustment_type        = "ChangeInCapacity"
+  scaling_adjustment     = 1
+  cooldown               = 120
+}
+
+resource "aws_autoscaling_policy" "scale_in" {
+  name                   = "${var.name}-asg-scale-in"
+  autoscaling_group_name = aws_autoscaling_group.ecs_asg.name
+  adjustment_type        = "ChangeInCapacity"
+  scaling_adjustment     = -1
+  cooldown               = 300
 }
